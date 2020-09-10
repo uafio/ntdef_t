@@ -3,6 +3,7 @@
 from sys import argv
 from struct import pack, unpack
 from enum import Enum
+from os import listdir
 
 class ImageDataDirectory(Enum):
     IMAGE_DIRECTORY_ENTRY_EXPORT = 0,
@@ -54,8 +55,8 @@ class PE(object):
             if pad:
                 offset += 4 - pad
             self.fp.seek(fo + offset)
-            version = self.w_str()
-            print('[!] Windows version: {}'.format(version))
+            self.version = self.w_str()
+            print('[!] Windows version: {}'.format(self.version))
 
     def image_dos_header(self):
         self.fp.seek(0)
@@ -164,6 +165,25 @@ class PE(object):
             'Characteristics': self.fp.read(4),
         }
     
+    def image_export_directory(self):
+        directory = self.image_data_directory(ImageDataDirectory.IMAGE_DIRECTORY_ENTRY_EXPORT)
+        fo = self.rva2fo(u32(directory['VirtualAddress']))
+        sz = u32(directory['Size'])
+        self.fp.seek(fo)
+        return {
+            'Characteristics': self.fp.read(4),
+            'TimeDateStamp': self.fp.read(4),
+            'MajorVersion': self.fp.read(2),
+            'MinorVersion': self.fp.read(2),
+            'Name': self.fp.read(4),
+            'Base': self.fp.read(4),
+            'NumberOfFunctions': self.fp.read(4),
+            'NumberOfNames': self.fp.read(4),
+            'AddressOfFunctions': self.fp.read(4),
+            'AddressOfNames': self.fp.read(4),
+            'AddressOfNameOrdinals': self.fp.read(4),
+        }
+
     def rva2fo(self, rva):
         if rva <= u32(self.image_optional_header()['FileAlignment']):
             return rva
@@ -190,25 +210,6 @@ class PE(object):
             result += bytes([c[0]])
             c = self.fp.read(2)
         return result
-
-    def image_export_directory(self):
-        directory = self.image_data_directory(ImageDataDirectory.IMAGE_DIRECTORY_ENTRY_EXPORT)
-        fo = self.rva2fo(u32(directory['VirtualAddress']))
-        sz = u32(directory['Size'])
-        self.fp.seek(fo)
-        return {
-            'Characteristics': self.fp.read(4),
-            'TimeDateStamp': self.fp.read(4),
-            'MajorVersion': self.fp.read(2),
-            'MinorVersion': self.fp.read(2),
-            'Name': self.fp.read(4),
-            'Base': self.fp.read(4),
-            'NumberOfFunctions': self.fp.read(4),
-            'NumberOfNames': self.fp.read(4),
-            'AddressOfFunctions': self.fp.read(4),
-            'AddressOfNames': self.fp.read(4),
-            'AddressOfNameOrdinals': self.fp.read(4),
-        }
 
 
 def get_syscall_number(data):
@@ -253,12 +254,47 @@ def get_syscalls():
 
     return syscalls
 
+def print_syscalls(syscalls):
+    for syscall in syscalls:
+        print('{:.<60s}: {:#x}'.format(syscalls[syscall], syscall))
+
+def get_definition(api):
+    for file in listdir('phnt'):
+        if not file.endswith('.h'):
+            continue
+
+        data = open(f'phnt/{file}', 'r').read().split('\n')
+        if api + '(' not in data:
+            continue
+
+        idx = data.index(api + '(')
+        params = []
+
+        while True:
+            idx += 1
+            param = data[idx].split()
+            if param[0].endswith(');'):
+                break
+            ptype = param[-2]
+            param = param[-1].strip(',')
+            params.append(f'{ptype} {param}')
+
+        return 'typedef NTSTATUS(NTAPI* {}_t)( {} );'.format(api, ', '.join(params))
+
+
+    print('NTAPI DEFINITION NOT FOUND: {}'.format(api))
+
 
 
 def main():
 
     syscalls = get_syscalls()
-    
+    #print_syscalls(syscalls)
+
+    for sys in syscalls:
+        ntdef = get_definition(syscalls[sys])
+        print(ntdef)
+        break
 
 
 if __name__ == '__main__':
