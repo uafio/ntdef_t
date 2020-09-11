@@ -275,9 +275,12 @@ def get_definition(api):
             param = data[idx].split()
             if param[0].endswith(');'):
                 break
-            ptype = param[-2]
-            param = param[-1].strip(',')
-            params.append(f'{ptype} {param}')
+            if param[0] == 'VOID':
+                params.append(f'{param[0]}')
+            else:
+                ptype = param[-2]
+                param = param[-1].strip(',')
+                params.append(f'{ptype} {param}')
 
         return 'typedef NTSTATUS(NTAPI* {}_t)( {} );'.format(api, ', '.join(params))
 
@@ -291,10 +294,11 @@ def main():
     syscalls = get_syscalls()
     #print_syscalls(syscalls)
 
-    for sys in syscalls:
-        ntdef = get_definition(syscalls[sys])
-        print(ntdef)
-        break
+    with open('ntdefs.h', 'w') as header:
+        for sys in syscalls:
+            ntdef = get_definition(syscalls[sys])
+            if ntdef:
+                header.write(ntdef + '\n')
 
 
 if __name__ == '__main__':
