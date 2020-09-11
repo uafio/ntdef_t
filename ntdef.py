@@ -3,7 +3,8 @@
 from sys import argv
 from struct import pack, unpack
 from enum import Enum
-from os import listdir
+from os import listdir, path
+from template import header
 
 class ImageDataDirectory(Enum):
     IMAGE_DIRECTORY_ENTRY_EXPORT = 0,
@@ -47,7 +48,7 @@ class PE(object):
         self.fp.seek(fo)
         rsrc = self.fp.read(sz)
         if b'n\0t\0d\0l\0l\0.\0d\0l\0l\0\0\0' not in rsrc:
-            print('[!] {} is likely not ntdll.dll')
+            print(f'\n[!] {fname} is likely not ntdll.dll\n')
         offset = rsrc.index(b'F\0i\0l\0e\0V\0e\0r\0s\0i\0o\0n\0\0\0\0\0')
         if offset:
             offset += 24
@@ -56,7 +57,7 @@ class PE(object):
                 offset += 4 - pad
             self.fp.seek(fo + offset)
             self.version = self.w_str()
-            print('[!] Windows version: {}'.format(self.version))
+            print(f'\n[!] Windows version: {self.version.decode()}\n')
 
     def image_dos_header(self):
         self.fp.seek(0)
@@ -255,6 +256,9 @@ def get_syscalls():
     return syscalls
 
 def print_syscalls(syscalls):
+    print('---------------------------------------------------------------------')
+    print('          NTAPI                                             | SYSCALL')
+    print('---------------------------------------------------------------------')
     for syscall in syscalls:
         print('{:.<60s}: {:#x}'.format(syscalls[syscall], syscall))
 
@@ -273,6 +277,8 @@ def get_definition(api):
         while True:
             idx += 1
             param = data[idx].split()
+            if '//' in param:
+                param = param[:param.index('//')]
             if param[0].endswith(');'):
                 break
             if param[0] == 'VOID':
@@ -294,11 +300,23 @@ def main():
     syscalls = get_syscalls()
     #print_syscalls(syscalls)
 
-    with open('ntdefs.h', 'w') as header:
-        for sys in syscalls:
-            ntdef = get_definition(syscalls[sys])
-            if ntdef:
-                header.write(ntdef + '\n')
+    if path.exists('ntdefs.h'):
+        with open('ntdefs.h', 'r') as hdrr, open('ntdefs.h', 'a') as hdra:
+            data = hdrr.read()
+            for sys in syscalls:
+                if f'{syscalls[sys]}_t' in data:
+                    continue
+                newsys = get_definition(syscalls[sys])
+                if newsys:
+                    print(f'APPENDING: {newsys}')
+                    hdra.append(newsys)
+    else:
+        with open('ntdefs.h', 'w') as hdr:
+            hdr.write(header)
+            for sys in syscalls:
+                newsys = get_definition(syscalls[sys])
+                if newsys:
+                    hdr.write(newsys + '\n')
 
 
 if __name__ == '__main__':
