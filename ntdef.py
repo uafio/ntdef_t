@@ -253,7 +253,7 @@ def get_syscalls():
             if sysnum > -1 and sysnum not in syscalls:
                 syscalls[sysnum] = fname.decode()
 
-    return syscalls
+    return syscalls, ntdll.version
 
 def print_syscalls(syscalls):
     print('---------------------------------------------------------------------')
@@ -294,29 +294,31 @@ def get_definition(api):
     print('NTAPI DEFINITION NOT FOUND: {}'.format(api))
 
 
+def generate_ssdt(syscalls, version):
+    with open('ssdt_t.h', 'w') as hdr:
+        hdr.write(header)
+        if version:
+            hdr.write(f'//\n// {version.decode()}\n//\n')
+        hdr.write('enum class ssdt_t {\n')
+        for sys in syscalls:
+            hdr.write(f'\t{syscalls[sys]} = {sys},\n')
+        hdr.write('};\n')
+
+def generate_ntdefs(syscalls):
+    with open('ntdefs.h', 'w') as hdr:
+        hdr.write(header)
+        for sys in syscalls:
+            newsys = get_definition(syscalls[sys])
+            if newsys:
+                hdr.write(newsys + '\n')
+
 
 def main():
+    syscalls, version = get_syscalls()
+    print_syscalls(syscalls)
+    generate_ssdt(syscalls, version)
+    generate_ntdefs(syscalls)
 
-    syscalls = get_syscalls()
-    #print_syscalls(syscalls)
-
-    if path.exists('ntdefs.h'):
-        with open('ntdefs.h', 'r') as hdrr, open('ntdefs.h', 'a') as hdra:
-            data = hdrr.read()
-            for sys in syscalls:
-                if f'{syscalls[sys]}_t' in data:
-                    continue
-                newsys = get_definition(syscalls[sys])
-                if newsys:
-                    print(f'APPENDING: {newsys}')
-                    hdra.append(newsys)
-    else:
-        with open('ntdefs.h', 'w') as hdr:
-            hdr.write(header)
-            for sys in syscalls:
-                newsys = get_definition(syscalls[sys])
-                if newsys:
-                    hdr.write(newsys + '\n')
 
 
 if __name__ == '__main__':

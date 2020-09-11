@@ -1,7 +1,7 @@
 header = \
-'''
+'''\
 /*
- * File (mostly) generated via ntdef_t project https://github.com/uafio/ntdef_t
+ * File generated via ntdef_t project https://github.com/uafio/ntdef_t
  * 
  * MIT License
  * 
@@ -26,8 +26,6 @@ header = \
  * SOFTWARE.
  */
 #pragma once
-#include <wdm.h>
-#include <ntifs.h>
 
 
 '''
